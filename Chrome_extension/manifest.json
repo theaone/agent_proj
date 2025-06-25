@@ -1,0 +1,32 @@
+{
+  "manifest_version": 3,
+  "name": "Streamlit Shortcuts",
+  "version": "1.0",
+  "description": "Streamlit应用快捷键控制",
+  "commands": {
+    "open_qa": {
+      "suggested_key": {
+        "default": "Ctrl+Shift+L",
+        "mac": "Command+Shift+L"
+      },
+      "description": "打开问答页面"
+    },
+    "go_home": {
+      "suggested_key": {
+        "default": "Ctrl+Shift+K",
+        "mac": "Command+Shift+K"
+      },
+      "description": "返回主页"
+    }
+  },
+  "background": {
+    "service_worker": "background.js"
+  },
+  "content_scripts": [
+    {
+      "matches": ["http://localhost:8501/*"],
+      "js": ["content.js"]
+    }
+  ],
+  "permissions": ["activeTab", "scripting"]
+}
