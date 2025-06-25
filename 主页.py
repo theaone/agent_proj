@@ -1,4 +1,3 @@
-
 import os
 import streamlit as st
 
@@ -28,6 +27,12 @@ st.markdown(
         justify-content: space-between;
         align-items: center;
         margin-bottom: 20px;
+    }
+    .shortcut-help {
+        margin-top: 20px;
+        padding: 10px;
+        background-color: #f0f0f0;
+        border-radius: 5px;
     }
     </style>
     """,
@@ -60,8 +65,8 @@ with col1:
         unsafe_allow_html=True
     )
 
-    if st.button("点此跳转", key="goto_intro", help="跳转到介绍页"):
-        st.switch_page("pages/介绍.py")  # 替换为实际路径
+    if st.button("点此跳转", key="goto_intro"):
+        st.switch_page("pages/介绍.py")  # 保持原有跳转逻辑
 
 # "我的文档"模块 + 功能选择下拉框
 with col2:
@@ -70,20 +75,21 @@ with col2:
     # 功能选择下拉框
     selected_option = st.selectbox(
         "📁 上传文件",
-        ["", "小智问答", "小智翻译", "网页爬取","数据分析", '图像处理','数据可视化']
+        ["", "小智问答", "小智翻译", "网页爬取", "数据清洗", "图像处理", "数据可视化"]
     )
 
+    # 保持原有跳转逻辑
     if selected_option == "小智问答":
         st.switch_page("pages/小智问答.py")
     elif selected_option == "小智翻译":
         st.switch_page("pages/小智翻译.py")
-    elif selected_option == "数据分析":
-        st.switch_page("pages/数据分析.py")
-    elif selected_option == '图像处理':
-        st.switch_page("pages/网页爬取.py")
-    elif selected_option == '网页爬取':
+    elif selected_option == "数据清洗":
+        st.switch_page("pages/数据清洗.py")
+    elif selected_option == "图像处理":
         st.switch_page("pages/图像处理.py")
-    elif selected_option == '数据可视化':
+    elif selected_option == "网页爬取":
+        st.switch_page("pages/网页爬取.py")
+    elif selected_option == "数据可视化":
         st.switch_page("pages/数据可视化.py")
 
 # 展示图片 2.png 并与虚线框对齐
@@ -95,7 +101,7 @@ else:
 
 # 添加快捷键说明
 st.markdown("""
-    <div style="margin-top: 20px; padding: 10px; background-color: #f0f0f0; border-radius: 5px;">
+    <div class="shortcut-help">
         <h4>快捷键说明：</h4>
         <ul>
             <li>Ctrl+L: 跳转到小智问答</li>
@@ -106,20 +112,31 @@ st.markdown("""
     </div>
 """, unsafe_allow_html=True)
 
-# 使用JavaScript实现全局快捷键
+# 添加JavaScript键盘监听
 st.markdown("""
-<script>
-const shortcuts = {
-    "KeyL": "pages/小智问答.py",
-    "KeyK": "主页.py",
-    "KeyB": "pages/小智翻译.py",
-    "KeyI": "pages/图像处理.py"
-};
-
-document.addEventListener('keydown', (e) => {
-    if (e.ctrlKey && shortcuts[e.code]) {
-        window.location.href = shortcuts[e.code];
-    }
-});
-</script>
+    <script>
+        // 监听键盘事件
+        document.addEventListener('keydown', function(e) {
+            // Ctrl + L：跳转到小智问答
+            if (e.ctrlKey && e.code === 'KeyL') {
+                e.preventDefault();
+                window.location.href = '/pages/小智问答.py';
+            }
+            // Ctrl + K：返回主页
+            else if (e.ctrlKey && e.code === 'KeyK') {
+                e.preventDefault();
+                window.location.href = '/';
+            }
+            // Ctrl + B：跳转到小智翻译
+            else if (e.ctrlKey && e.code === 'KeyB') {
+                e.preventDefault();
+                window.location.href = '/pages/小智翻译.py';
+            }
+            // Ctrl + I：跳转到图像处理
+            else if (e.ctrlKey && e.code === 'KeyI') {
+                e.preventDefault();
+                window.location.href = '/pages/图像处理.py';
+            }
+        });
+    </script>
 """, unsafe_allow_html=True)

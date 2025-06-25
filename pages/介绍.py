@@ -83,7 +83,18 @@ with (st.sidebar):
         if st.button("分析介绍", key="analysis_intro"):
             st.session_state.current_page = '数据分析'
             st.session_state.sub_page = '分析介绍'
-
+        if st.button("核心功能", key="analysis_center"):
+            st.session_state.current_page = '数据分析'
+            st.session_state.sub_page = '核心功能'
+        if st.button("工作台介绍", key="analysis_workbench"):
+            st.session_state.current_page = '数据分析'
+            st.session_state.sub_page = '工作台介绍'
+        if st.button("操作步骤", key="analysis_steps"):
+            st.session_state.current_page = '数据分析'
+            st.session_state.sub_page = '操作步骤'
+        if st.button("示例运行", key="analysis_example"):
+            st.session_state.current_page = '数据分析'
+            st.session_state.sub_page = '示例运行'
     with st.expander("图像处理", expanded=st.session_state.current_page == "图像处理"):
         if st.button("处理介绍", key="image_intro"):
             st.session_state.current_page = '图像处理'
@@ -623,15 +634,127 @@ elif st.session_state.current_page == "数据分析":
         st.markdown("<div class='title'>数据分析介绍</div><br>", unsafe_allow_html=True)
         st.markdown("""
             <div class="content">
-                小智数据分析是一款强大的数据分析工具，能够处理各种类型的数据并生成有价值的见解。
-                主要功能包括：
-                - 数据清洗：处理缺失值、异常值等
-                - 统计分析：计算各种统计指标
-                - 数据可视化：生成图表和图形
-                - 预测分析：基于历史数据进行预测
-                - 文本分析：处理和分析文本数据
+                小智数据分析是一款强大的数据分析工具，能够处理各种类型的数据并生成有价值的见解。<br>
+                主要功能包括：<br>
+                数据清洗与预处理：数据读取与检查、缺失值处理、重复值处理、异常值检测与处理、数据类型转换、数据标准化/归一化、特征工程（新增列）<br>
+                统计分析:描述性统计、相关性分析、数据分布可视化、分组聚合分析<br>
             </div>
         """, unsafe_allow_html=True)
+        # 新增数据清洗模块说明
+    elif st.session_state.sub_page == "核心功能":
+        st.markdown("<div class='title'>一、数据清洗模块介绍</div><br>", unsafe_allow_html=True)
+        st.markdown("""
+                <div class="content">
+                    <strong>数据清洗助手</strong>是一款基于大语言模型与数据分析技术构建的智能数据清洗工具，
+                    支持用户上传数据文件（CSV、Excel、JSON）并自动执行数据预处理任务，如缺失值处理、重复值删除、数据标准化,描述性统计、相关性分析、数据分布可视化、分组聚合分析等。<br>                  
+                    该工具可广泛应用于：<br>
+                    - 销售数据分析：清理销售记录中的无效数据<br>
+                    - 科研实验数据：去除异常值，统一单位或格式<br>
+                    - 财务报表处理：校正数据格式错误，确保一致性<br>
+
+                    <center>功能亮点：</center><br>
+                    - 自动识别文件格式并加载数据<br>
+                    - 智能分析数据摘要（行数、列数、缺失值统计等）<br>
+                    - 提供多种数据清洗选项（缺失值填充、删除重复项、数据转换）<br>
+                    - 支持多轮交互式优化需求<br>
+                    - 可导出清洗后的数据为CSV文件<br>
+                </div>
+            """, unsafe_allow_html=True)
+
+        st.markdown("<div class='title'>二、数据清洗操作步骤</div><br>", unsafe_allow_html=True)
+        st.markdown("""
+                <div class="content">
+                    下面是使用数据清洗模块的具体操作步骤：
+
+                    1. 准备数据
+                       - 上传要清洗的数据文件（CSV、Excel、JSON）
+                       - 确认数据范围和字段含义
+
+                    2. 明确需求
+                       - 告知以下信息：
+                         - 处理目标：清除缺失值、去重、标准化等
+                         - 特定列的清洗规则
+                         - 是否需要保存结果
+
+                    3. 执行清洗
+                       - 系统将：
+                         - 自动分析数据特征
+                         - 根据提示词生成对应的Python代码
+                         - 执行清洗任务并显示结果
+                         - 支持查看清洗后的数据摘要
+
+                    4. 导出结果
+                       - 下载清洗后的数据为 CSV 文件
+                       - 可视化展示清洗前后的对比图表
+                </div>
+            """, unsafe_allow_html=True)
+
+        # 添加图片路径
+        image_path = os.path.abspath(
+            os.path.join(os.path.dirname(__file__), '..', 'images', '31.png'))
+
+        st.image(image_path, caption="数据清洗主界面示意图", use_container_width=True)
+        st.markdown("""<div class="content">
+                数据清洗主界面布局。左侧为上传数据文件区域，支持CSV、Excel或JSON文件，下面简要介绍了该板块具有的功能；
+                右侧为用户与ai交互区域，用户可请问并实时查看清洗进度与分析结果。
+            </div>""", unsafe_allow_html=True)
+        st.markdown("<div class='title'>三、数据分析模块介绍/div><br>", unsafe_allow_html=True)
+        st.markdown("""
+                <div class="content">
+                    <strong>数据分析助手</strong>是一款基于大语言模型与数据分析技术构建的智能数据分析工具，
+                    支持用户上传数据文件（CSV、Excel、JSON）并自动执行数据描述性统计、相关性分析、数据分布可视化、分组聚合分析等。<br>                  
+                    该工具可广泛应用于：<br>
+                        - 企业销售数据统计与趋势分析<br>
+                        - 科研实验数据的分布与异常值检测<br>
+                        - 财务报表的数据透视与对比分析<br>
+                        - 政府机构或社会团体的人口、经济等宏观数据可视化<br>
+
+                        <center>功能亮点：</center><br>
+                        - 自动识别文件格式并加载数据<br>
+                        - 提供描述性统计信息（均值、方差、最大值、最小值）<br>
+                        - 支持相关性分析及热力图展示<br>
+                        - 数据分布可视化（直方图、箱型图、折线图等）<br>
+                        - 分组聚合分析支持多维数据切片<br>
+                        - 可生成标准化JSON输出，并导出图表结果<br>
+                    </div>
+                """, unsafe_allow_html=True)
+        st.markdown("<div class='title'>四、数据分析操作步骤</div><br>", unsafe_allow_html=True)
+        st.markdown("""
+                    <div class='content'>
+                        下面是使用数据分析模块的具体操作步骤：
+
+                        1. 准备数据
+                           - 上传CSV、Excel或JSON格式的数据文件
+                           - 确认字段含义并进行必要的预处理
+
+                        2. 明确需求
+                           - 告知以下信息：
+                             - 需要执行的分析类型（如“销售额的趋势分析”）
+                             - 是否需要图表展示
+                             - 目标受众（如“管理层汇报”）
+
+                        3. 生成分析报告
+                           - 系统将：
+                             - 自动分析数据特征
+                             - 推荐合适的图表类型
+                             - 生成初步的可视化效果
+                             - 提供详细的数据分析说明
+
+                        4. 优化调整
+                           您可以要求：
+                             - 调整颜色方案和样式
+                             - 修改图表大小和布局
+                             - 添加或修改数据标签
+                             - 导出图表为PNG/PDF格式
+                    </div>
+                """, unsafe_allow_html=True)
+
+        # 添加图片路径（假设存在相关截图）
+        image_path = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', 'images', '34.png'))
+        st.image(image_path, caption="数据分析主界面示意图", use_container_width=True)
+        st.markdown("""<div class="content">
+        生成用户需要的结果和对应的代码。
+                </div>""", unsafe_allow_html=True)
 
 # 数据可视化页面内容
 elif st.session_state.current_page == "数据可视化":

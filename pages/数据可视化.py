@@ -6,29 +6,17 @@ import re
 from langchain_experimental.agents import create_pandas_dataframe_agent
 from langchain_openai import ChatOpenAI
 from pydantic import SecretStr
-import plotly.express as px
+import plotly.express as px#高级可视化库
 import plotly.graph_objects as go
 import os
+from datetime import datetime
 
-# 检查resources目录是否存在，不存在则创建
-if not os.path.exists('resources'):
-    os.makedirs('resources')
-    # 创建示例文件
-    with open('project/resources/能力介绍.txt', 'w', encoding='utf-8') as f:
-        f.write("数据分析智能体能力介绍：\n1. 数据可视化\n2. 趋势分析\n3. 异常检测\n4. 图形分析")
-
-    with open('project/resources/提示词指南.txt', 'w', encoding='utf-8') as f:
-        f.write("提示词使用指南：\n1. 明确指定图表类型\n2. 指定时间范围\n3. 指定关注指标\n4. 可要求分析图形特征")
-
-
-# 读取文件内容
 def read_file_content(filename):
     try:
         with open(f'resources/{filename}', 'r', encoding='utf-8') as f:
             return f.read()
     except FileNotFoundError:
         return f"文件 {filename} 未找到"
-
 
 # 模型配置
 ds_model = ChatOpenAI(
@@ -40,8 +28,8 @@ ds_model = ChatOpenAI(
 # 增强版提示词模板 - 强调使用完整数据
 PROMPT_PREFIX = """你是一位数据分析助手，请严格按照以下JSON格式返回结果，并确保使用完整数据集进行分析：
 {
-  "answer": "简要文字说明(可选)",
-  "analysis": "对生成图形的详细分析(可选)",
+  "answer": "简要文字说明",
+  "analysis": "对生成图形的详细分析",
   "table": {
     "columns": ["列名1", "列名2"],
     "data": [[值1, 值2], [值3, 值4]]
@@ -113,11 +101,16 @@ PROMPT_PREFIX = """你是一位数据分析助手，请严格按照以下JSON格
   }
 }
 注意：1. 所有字符串用双引号 2. 数值不加引号 3. 图表数据必须保持长度一致 4. 只返回JSON，不要额外文本
+在提示词中明确要求只返回请求的图表类型
+
+在解析响应时识别用户请求的图表类型
+
+只绘制用户请求的图表
 当前问题："""
 
 
 def extract_json_from_response(text):
-    """终极JSON解析器"""
+    """终极JSON解析器 从响应文本中提取JSON数据"""
     try:
         # 尝试直接提取最外层JSON
         text = text.replace("'", '"').strip()
@@ -158,8 +151,105 @@ def extract_json_from_response(text):
     except Exception as e:
         return {"answer": f"解析错误: {str(e)}", "raw": text}
 
+def generate_chart_title(chart_type, question):
+    """自动生成图表标题和轴标签"""
+    # 从问题中提取关键信息
+    keywords = re.findall(r'[A-Za-z0-9]+', question)
+    main_keywords = [kw for kw in keywords if len(kw) > 3][:2]
 
-# 模型配置部分保持不变
+    # 根据图表类型生成标题
+    chart_names = {
+        'line': '趋势图',
+        'bar': '柱状图',
+        'pie': '饼图',
+        'scatter': '散点图',
+        'heatmap': '热力图',
+        'histogram': '分布图',
+        'area': '面积图',
+        'donut': '环形图',
+        'radar': '雷达图',
+        'waterfall': '瀑布图',
+        'tree': '树形图',
+        'sankey': '桑基图'
+    }
+
+    chart_name = chart_names.get(chart_type, '图表')
+    title = f"{' '.join(main_keywords)} {chart_name}" if main_keywords else f"数据{chart_name}"
+
+    # 生成轴标签
+    x_label = f"{main_keywords[0]} (单位)" if main_keywords else "X轴"
+    y_label = f"{main_keywords[-1]} (单位)" if main_keywords else "Y轴"
+
+    return title, x_label, y_label
+
+def apply_chart_style(fig, chart_type):
+    """应用统一的图表样式和颜色方案
+    参数:
+        fig (plotly.graph_objects.Figure): 图表对象
+        chart_type (str): 图表类型
+
+    返回:
+        plotly.graph_objects.Figure: 应用样式后的图表对象
+    """
+
+    # 设置统一的字体和背景
+    fig.update_layout(
+        font_family="Arial",
+        plot_bgcolor='rgba(240,240,240,1)',
+        paper_bgcolor='rgba(255,255,255,1)',
+        margin=dict(l=20, r=20, t=40, b=20)
+    )
+
+    # 根据图表类型应用特定样式
+    if chart_type in ['line', 'area', 'step']:
+        fig.update_traces(line=dict(width=2.5))
+    elif chart_type == 'bar':
+        fig.update_traces(marker_line_width=0.5, marker_line_color='white')
+    elif chart_type in ['pie', 'donut']:
+        fig.update_traces(textposition='inside', textinfo='percent+label')
+    elif chart_type == 'scatter':
+        fig.update_traces(marker=dict(size=12, opacity=0.7))
+    elif chart_type == 'heatmap':
+        fig.update_traces(showscale=True, colorscale='Viridis')
+
+    # 应用响应式设计
+    fig.update_layout(
+        autosize=True,
+        hovermode='closest'
+    )
+
+    return fig
+
+def optimize_data_display(data, chart_type):
+    """优化数据展示效果
+
+    参数:
+        data (list): 原始数据列表
+        chart_type (str): 图表类型
+
+    返回:
+        list: 优化后的数据列表
+    """
+    if not data:
+        return data
+
+    # 对于时间序列数据，尝试转换日期格式
+    if chart_type in ['line', 'area', 'step', 'bar']:
+        try:
+            if isinstance(data[0], str) and any(d.isdigit() for d in data):
+                # 尝试解析日期
+                parsed_dates = [pd.to_datetime(d, errors='ignore') for d in data]
+                if all(isinstance(d, pd.Timestamp) for d in parsed_dates):
+                    # 如果是日期，格式化为更友好的形式
+                    return [d.strftime('%Y-%m-%d') if not pd.isna(d) else d for d in parsed_dates]
+        except:
+            pass
+
+    # 对于数值数据，限制小数位数
+    if isinstance(data[0], (int, float)):
+        return [round(float(d), 2) if d is not None else 0 for d in data]
+
+    return data
 
 def dataframe_agent(df, question):
     """稳健版数据分析智能体 - 确保使用完整数据"""
@@ -168,11 +258,11 @@ def dataframe_agent(df, question):
     agent = create_pandas_dataframe_agent(
         llm=ds_model,
         df=df,
-        verbose=True,
-        max_iterations=5,
-        include_df_in_prompt=True,
-        allow_dangerous_code=True,
-        agent_executor_kwargs={"return_only_outputs": True}
+        verbose=True,# 详细输出
+        max_iterations=5,# 最大迭代次数
+        include_df_in_prompt=True, # 在提示中包含数据框
+        allow_dangerous_code=True,# 允许执行代码
+        agent_executor_kwargs={"return_only_outputs": True}# 只返回输出
     )
 
     try:
@@ -183,7 +273,6 @@ def dataframe_agent(df, question):
     except Exception as e:
         error_response = extract_json_from_response(str(e))
         return error_response if isinstance(error_response, dict) else {"answer": str(e)}
-
 
 def numerical_analysis_agent(df, question):
     """直接数值分析引擎 - 不生成可视化，只返回计算结果"""
@@ -225,8 +314,10 @@ def numerical_analysis_agent(df, question):
         return {"answer": output}
     except Exception as e:
         return {"answer": f"计算错误: {str(e)}", "details": str(e)}
+
+
 def display_result(result):
-    """增强版结果显示函数 - 支持完整数据展示和图形分析"""
+    """增强版结果显示函数 - 专注于图形展示"""
     if not isinstance(result, dict):
         try:
             result = json.loads(result)
@@ -242,241 +333,259 @@ def display_result(result):
         st.subheader("📊 图形分析")
         st.write(result['analysis'])
 
-    # 显示表格数据
-    if 'table' in result:
-        try:
-            df = pd.DataFrame(
-                data=result['table'].get('data', []),
-                columns=result['table'].get('columns', [])
-            )
-            st.dataframe(df)
-        except Exception as e:
-            st.error(f"表格显示错误: {str(e)}")
-
-    # 展示趋势变化的图表 - 使用完整数据
+    # 显示趋势变化的图表 - 使用完整数据并调整大小
     if any(chart_type in result for chart_type in ['line', 'area', 'step']):
-        col1, col2, col3 = st.columns(3)
-
-        if 'line' in result:
-            with col1:
+        for chart_type in ['line', 'area', 'step']:
+            if chart_type in result:
                 try:
-                    x_data = result['line'].get('columns', [])
-                    y_data = result['line'].get('data', [])
+                    x_data = optimize_data_display(result[chart_type].get('columns', []), chart_type)
+                    y_data = optimize_data_display(result[chart_type].get('data', []), chart_type)
 
                     # 数据长度检查和自动修复
                     if len(x_data) != len(y_data):
-                        st.warning(f"折线图数据长度不匹配: x轴({len(x_data)}) y轴({len(y_data)})")
                         if len(y_data) > 0:
                             x_data = list(range(len(y_data)))
 
-                    fig = px.line(
-                        x=x_data,
-                        y=y_data,
-                        title="完整数据折线图"
+                    title, x_label, y_label = generate_chart_title(chart_type, result.get('answer', ''))
+
+                    if chart_type == 'line':
+                        fig = px.line(
+                            x=x_data,
+                            y=y_data,
+                            title=title,
+                            labels={'x': x_label, 'y': y_label}
+                        )
+                    elif chart_type == 'area':
+                        fig = px.area(
+                            x=x_data,
+                            y=y_data,
+                            title=title,
+                            labels={'x': x_label, 'y': y_label}
+                        )
+                    else:  # step
+                        fig = go.Figure(go.Scatter(
+                            x=x_data,
+                            y=y_data,
+                            mode='lines+markers',
+                            line_shape='hv',
+                            name=title
+                        ))
+                        fig.update_layout(
+                            title=title,
+                            xaxis_title=x_label,
+                            yaxis_title=y_label
+                        )
+
+                    fig.update_layout(
+                        height=500,  # 增加图表高度
+                        margin=dict(l=20, r=20, t=60, b=20),
+                        autosize=True
                     )
+                    fig = apply_chart_style(fig, chart_type)
                     st.plotly_chart(fig, use_container_width=True)
                 except Exception as e:
-                    st.error(f"折线图生成错误: {str(e)}")
+                    st.error(f"{chart_type}图生成错误: {str(e)}")
 
-        if 'area' in result:
-            with col2:
-                try:
-                    x_data = result['area'].get('columns', [])
-                    y_data = result['area'].get('data', [])
-
-                    if len(x_data) != len(y_data):
-                        st.warning(f"面积图数据长度不匹配: x轴({len(x_data)}) y轴({len(y_data)})")
-                        if len(y_data) > 0:
-                            x_data = list(range(len(y_data)))
-
-                    fig = px.area(
-                        x=x_data,
-                        y=y_data,
-                        title="完整数据面积图"
-                    )
-                    st.plotly_chart(fig, use_container_width=True)
-                except Exception as e:
-                    st.error(f"面积图生成错误: {str(e)}")
-
-        if 'step' in result:
-            with col3:
-                try:
-                    x_data = result['step'].get('columns', [])
-                    y_data = result['step'].get('data', [])
-
-                    if len(x_data) != len(y_data):
-                        st.warning(f"阶梯图数据长度不匹配: x轴({len(x_data)}) y轴({len(y_data)})")
-                        if len(y_data) > 0:
-                            x_data = list(range(len(y_data)))
-
-                    fig = go.Figure(go.Scatter(
-                        x=x_data,
-                        y=y_data,
-                        mode='lines+markers',
-                        line_shape='hv',
-                        name='完整数据阶梯图'
-                    ))
-                    fig.update_layout(title="完整数据阶梯图")
-                    st.plotly_chart(fig, use_container_width=True)
-                except Exception as e:
-                    st.error(f"阶梯图生成错误: {str(e)}")
-
-    # 比较数值大小的图表 - 使用完整数据
+    # 显示比较数值大小的图表
     if any(chart_type in result for chart_type in ['bar', 'radar', 'waterfall']):
-        col1, col2, col3 = st.columns(3)
-
-        if 'bar' in result:
-            with col1:
+        for chart_type in ['bar', 'radar', 'waterfall']:
+            if chart_type in result:
                 try:
-                    x_data = result['bar'].get('columns', [])
-                    y_data = result['bar'].get('data', [])
+                    if chart_type == 'bar':
+                        x_data = optimize_data_display(result['bar'].get('columns', []), 'bar')
+                        y_data = optimize_data_display(result['bar'].get('data', []), 'bar')
 
-                    if len(x_data) != len(y_data):
-                        st.warning(f"柱状图数据长度不匹配: x轴({len(x_data)}) y轴({len(y_data)})")
-                        if len(y_data) > 0:
-                            x_data = list(range(len(y_data)))
+                        if len(x_data) != len(y_data):
+                            if len(y_data) > 0:
+                                x_data = list(range(len(y_data)))
 
-                    fig = px.bar(
-                        x=x_data,
-                        y=y_data,
-                        title="完整数据柱状图"
+                        title, x_label, y_label = generate_chart_title('bar', result.get('answer', ''))
+
+                        fig = px.bar(
+                            x=x_data,
+                            y=y_data,
+                            title=title,
+                            labels={'x': x_label, 'y': y_label},
+                            color=x_data,
+                            color_continuous_scale='Bluered'
+                        )
+                    elif chart_type == 'radar':
+                        title, _, _ = generate_chart_title('radar', result.get('answer', ''))
+
+                        fig = go.Figure(go.Scatterpolar(
+                            r=optimize_data_display(result['radar'].get('r', []), 'radar'),
+                            theta=optimize_data_display(result['radar'].get('theta', []), 'radar'),
+                            fill='toself',
+                            name=title
+                        ))
+                        fig.update_layout(
+                            polar=dict(
+                                radialaxis=dict(visible=True),
+                                angularaxis=dict(direction="clockwise")
+                            )
+                        )
+                    else:  # waterfall
+                        x_data = optimize_data_display(result['waterfall'].get('x', []), 'waterfall')
+                        y_data = optimize_data_display(result['waterfall'].get('y', []), 'waterfall')
+
+                        title, x_label, y_label = generate_chart_title('waterfall', result.get('answer', ''))
+
+                        fig = go.Figure(go.Waterfall(
+                            x=x_data,
+                            y=y_data,
+                            textposition="outside",
+                            connector={"line": {"color": "rgb(63, 63, 63)"}},
+                            name=title
+                        ))
+                        fig.update_layout(
+                            xaxis_title=x_label,
+                            yaxis_title=y_label
+                        )
+
+                    fig.update_layout(
+                        height=500,
+                        margin=dict(l=20, r=20, t=60, b=20),
+                        autosize=True
                     )
+                    fig = apply_chart_style(fig, chart_type)
                     st.plotly_chart(fig, use_container_width=True)
                 except Exception as e:
-                    st.error(f"柱状图生成错误: {str(e)}")
+                    st.error(f"{chart_type}图生成错误: {str(e)}")
 
-        if 'radar' in result:
-            with col2:
-                try:
-                    fig = go.Figure(go.Scatterpolar(
-                        r=result['radar'].get('r', []),
-                        theta=result['radar'].get('theta', []),
-                        fill='toself',
-                        name='完整数据雷达图'
-                    ))
-                    fig.update_layout(title="完整数据雷达图")
-                    st.plotly_chart(fig, use_container_width=True)
-                except Exception as e:
-                    st.error(f"雷达图生成错误: {str(e)}")
-
-        if 'waterfall' in result:
-            with col3:
-                try:
-                    fig = go.Figure(go.Waterfall(
-                        x=result['waterfall'].get('x', []),
-                        y=result['waterfall'].get('y', []),
-                        textposition="outside",
-                        connector={"line": {"color": "rgb(63, 63, 63)"}},
-                    ))
-                    fig.update_layout(title="完整数据瀑布图")
-                    st.plotly_chart(fig, use_container_width=True)
-                except Exception as e:
-                    st.error(f"瀑布图生成错误: {str(e)}")
-
-    # 显示占比关系的图表 - 使用完整数据
+    # 显示占比关系的图表
     if any(chart_type in result for chart_type in ['pie', 'donut']):
-        col1, col2 = st.columns(2)
-
-        if 'pie' in result:
-            with col1:
+        for chart_type in ['pie', 'donut']:
+            if chart_type in result:
                 try:
+                    labels = optimize_data_display(result[chart_type].get('labels', []), chart_type)
+                    values = optimize_data_display(result[chart_type].get('values', []), chart_type)
+
+                    title, _, _ = generate_chart_title(chart_type, result.get('answer', ''))
+
                     fig = px.pie(
-                        names=result['pie'].get('labels', []),
-                        values=result['pie'].get('values', []),
-                        title="完整数据饼图"
+                        names=labels,
+                        values=values,
+                        title=title,
+                        hole=0.4 if chart_type == 'donut' else 0,
+                        color_discrete_sequence=px.colors.sequential.RdBu
                     )
+                    fig.update_layout(
+                        height=500,
+                        margin=dict(l=20, r=20, t=60, b=20),
+                        autosize=True
+                    )
+                    fig = apply_chart_style(fig, chart_type)
                     st.plotly_chart(fig, use_container_width=True)
                 except Exception as e:
-                    st.error(f"饼图生成错误: {str(e)}")
+                    st.error(f"{chart_type}图生成错误: {str(e)}")
 
-        if 'donut' in result:
-            with col2:
-                try:
-                    fig = px.pie(
-                        names=result['donut'].get('labels', []),
-                        values=result['donut'].get('values', []),
-                        hole=0.4,
-                        title="完整数据环形图"
-                    )
-                    st.plotly_chart(fig, use_container_width=True)
-                except Exception as e:
-                    st.error(f"环形图生成错误: {str(e)}")
-
-    # 展示分布情况的图表 - 使用完整数据
+    # 显示分布情况的图表
     if any(chart_type in result for chart_type in ['scatter', 'heatmap', 'histogram']):
-        col1, col2, col3 = st.columns(3)
-
-        if 'scatter' in result:
-            with col1:
+        for chart_type in ['scatter', 'heatmap', 'histogram']:
+            if chart_type in result:
                 try:
-                    fig = px.scatter(
-                        x=result['scatter'].get('x', []),
-                        y=result['scatter'].get('y', []),
-                        size=result['scatter'].get('size', []),
-                        title="完整数据散点图"
+                    if chart_type == 'scatter':
+                        x_data = optimize_data_display(result['scatter'].get('x', []), 'scatter')
+                        y_data = optimize_data_display(result['scatter'].get('y', []), 'scatter')
+                        size_data = optimize_data_display(result['scatter'].get('size', []), 'scatter') or [10] * len(x_data)
+
+                        title, x_label, y_label = generate_chart_title('scatter', result.get('answer', ''))
+
+                        fig = px.scatter(
+                            x=x_data,
+                            y=y_data,
+                            size=size_data,
+                            title=title,
+                            labels={'x': x_label, 'y': y_label},
+                            color=y_data,
+                            color_continuous_scale='Rainbow'
+                        )
+                    elif chart_type == 'heatmap':
+                        x_data = optimize_data_display(result['heatmap'].get('x', []), 'heatmap')
+                        y_data = optimize_data_display(result['heatmap'].get('y', []), 'heatmap')
+                        z_data = optimize_data_display(result['heatmap'].get('z', []), 'heatmap')
+
+                        title, x_label, y_label = generate_chart_title('heatmap', result.get('answer', ''))
+
+                        fig = go.Figure(go.Heatmap(
+                            x=x_data,
+                            y=y_data,
+                            z=z_data,
+                            colorscale='Viridis',
+                            name=title
+                        ))
+                        fig.update_layout(
+                            xaxis_title=x_label,
+                            yaxis_title=y_label
+                        )
+                    else:  # histogram
+                        values = optimize_data_display(result['histogram'].get('values', []), 'histogram')
+
+                        title, x_label, y_label = generate_chart_title('histogram', result.get('answer', ''))
+
+                        fig = px.histogram(
+                            x=values,
+                            title=title,
+                            labels={'x': x_label, 'y': y_label},
+                            nbins=min(20, len(set(values))),
+                            color_discrete_sequence=['#636EFA']
+                        )
+
+                    fig.update_layout(
+                        height=500,
+                        margin=dict(l=20, r=20, t=60, b=20),
+                        autosize=True
                     )
+                    fig = apply_chart_style(fig, chart_type)
                     st.plotly_chart(fig, use_container_width=True)
                 except Exception as e:
-                    st.error(f"散点图生成错误: {str(e)}")
+                    st.error(f"{chart_type}图生成错误: {str(e)}")
 
-        if 'heatmap' in result:
-            with col2:
+    # 显示关系网络的图表
+    if any(chart_type in result for chart_type in ['tree', 'sankey']):
+        for chart_type in ['tree', 'sankey']:
+            if chart_type in result:
                 try:
-                    fig = go.Figure(go.Heatmap(
-                        x=result['heatmap'].get('x', []),
-                        y=result['heatmap'].get('y', []),
-                        z=result['heatmap'].get('z', []),
-                        colorscale='Viridis'
-                    ))
-                    fig.update_layout(title="完整数据热力图")
+                    if chart_type == 'tree':
+                        labels = optimize_data_display(result['tree'].get('labels', []), 'tree')
+                        parents = optimize_data_display(result['tree'].get('parents', []), 'tree')
+
+                        title, _, _ = generate_chart_title('tree', result.get('answer', ''))
+
+                        fig = go.Figure(go.Treemap(
+                            labels=labels,
+                            parents=parents,
+                            marker_colors=["#636EFA", "#EF553B", "#00CC96"],
+                            name=title
+                        ))
+                    else:  # sankey
+                        nodes = optimize_data_display(result['sankey'].get('nodes', []), 'sankey')
+                        links = result['sankey'].get('links', [])
+
+                        title, _, _ = generate_chart_title('sankey', result.get('answer', ''))
+
+                        fig = go.Figure(go.Sankey(
+                            node=dict(
+                                label=nodes,
+                                color=['#636EFA' for _ in nodes]
+                            ),
+                            link=dict(
+                                source=[link.get('source') for link in links],
+                                target=[link.get('target') for link in links],
+                                value=[link.get('value') for link in links],
+                                color=['rgba(99, 110, 250, 0.3)' for _ in links]
+                            )
+                        ))
+
+                    fig.update_layout(
+                        height=600,  # 网络图需要更大高度
+                        margin=dict(l=20, r=20, t=60, b=20),
+                        autosize=True
+                    )
+                    fig = apply_chart_style(fig, chart_type)
                     st.plotly_chart(fig, use_container_width=True)
                 except Exception as e:
-                    st.error(f"热力图生成错误: {str(e)}")
-
-        if 'histogram' in result:
-            with col3:
-                try:
-                    fig = px.histogram(
-                        x=result['histogram'].get('values', []),
-                        title="完整数据直方图"
-                    )
-                    st.plotly_chart(fig, use_container_width=True)
-                except Exception as e:
-                    st.error(f"直方图生成错误: {str(e)}")
-
-    # 展示关系网络的图表 - 使用完整数据
-    if any(chart_type in result for chart_type in ['network', 'tree', 'sankey']):
-
-        if 'tree' in result:
-            try:
-                fig = go.Figure(go.Treemap(
-                    labels=result['tree'].get('labels', []),
-                    parents=result['tree'].get('parents', []),
-                    marker_colors=["#636EFA", "#EF553B", "#00CC96"]
-                ))
-                fig.update_layout(title="完整数据树形图")
-                st.plotly_chart(fig, use_container_width=True)
-            except Exception as e:
-                st.error(f"树形图生成错误: {str(e)}")
-
-        if 'sankey' in result:
-            try:
-                fig = go.Figure(go.Sankey(
-                    node=dict(
-                        label=result['sankey'].get('nodes', [])
-                    ),
-                    link=dict(
-                        source=[link.get('source') for link in result['sankey'].get('links', [])],
-                        target=[link.get('target') for link in result['sankey'].get('links', [])],
-                        value=[link.get('value') for link in result['sankey'].get('links', [])]
-                    )
-                ))
-                fig.update_layout(title="完整数据桑基图")
-                st.plotly_chart(fig, use_container_width=True)
-            except Exception as e:
-                st.error(f"桑基图生成错误: {str(e)}")
-
-
+                    st.error(f"{chart_type}图生成错误: {str(e)}")
 def show_sidebar_content(title, filename):
     """显示侧边栏内容"""
     content = read_file_content(filename)
@@ -488,11 +597,11 @@ def show_sidebar_content(title, filename):
 
 # 初始化会话状态
 if 'history' not in st.session_state:
-    st.session_state['history'] = []
+    st.session_state['history'] = []# 存储对话历史
 if 'df' not in st.session_state:
-    st.session_state['df'] = None
+    st.session_state['df'] = None# 存储当前数据框
 if 'raw_response' not in st.session_state:
-    st.session_state['raw_response'] = ''
+    st.session_state['raw_response'] = ''# 存储原始响应
 if 'conversation_pairs' not in st.session_state:
     st.session_state['conversation_pairs'] = []  # 存储完整的问答对
 if 'selected_conversation' not in st.session_state:
@@ -501,10 +610,10 @@ if 'active_sidebar' not in st.session_state:
     st.session_state['active_sidebar'] = None  # 当前激活的侧边栏
 
 # 设置页面配置
-st.set_page_config(page_title="数据分析智能体", layout="wide")
+st.set_page_config(page_title="数据分析可视化", layout="wide")
 
 # 主界面
-st.title("📊 数据分析智能体")
+st.title("📊 数据分析可视化")
 
 # 图片展示区域 - 使用Streamlit原生组件
 col1, col2 = st.columns(2)
@@ -537,7 +646,7 @@ with st.expander("📤 上传数据文件", expanded=True):
             else:
                 st.session_state['df'] = pd.read_csv(file)
             st.success("数据加载成功！")
-            st.dataframe(st.session_state['df'].head(3))
+            st.dataframe(st.session_state['df'].head(3).style.format(precision=2))
         except Exception as e:
             st.error(f"文件加载失败: {str(e)}")
 
@@ -548,9 +657,9 @@ for i, pair in enumerate(st.session_state['conversation_pairs']):
         st.markdown("---")
         st.markdown("**当前查看的对话:**")
 
-    with st.chat_message("user"):
+    with st.chat_message("user"):# 用户消息样式
         st.write(pair['question'])
-    with st.chat_message("assistant"):
+    with st.chat_message("assistant"): # 助手消息样式
         display_result(json.loads(pair['answer']))
 
     if i == st.session_state['selected_conversation']:
@@ -567,7 +676,7 @@ if question and st.session_state.get('df') is not None:
     # 添加到历史记录
     st.session_state['history'].append({'role': 'human', 'content': question})
 
-    with st.spinner('分析中...'):
+    with st.spinner('分析中...'):# 加载动画
         # 判断是否应该使用数值分析
         numerical_keywords = ['计算', '多少', '平均值', '总和', '差异', '比率', '占比']
         if any(keyword in question for keyword in numerical_keywords):
@@ -601,11 +710,10 @@ if question and st.session_state.get('df') is not None:
     st.rerun()
 
 elif question and not st.session_state.get('df'):
-    st.error("请先上传数据文件")
-
-# 历史对话侧边栏
+    st.error("请先上传数据文件")# 错误提示
+# 侧边栏 - 对话历史
 with st.sidebar:
-    st.header("🗒️ 对话历史")
+    st.header("🗒️ 对话历史") # 侧边栏标题
 
     # 添加"查看全部"按钮
     if st.button("查看全部对话"):
@@ -616,12 +724,22 @@ with st.sidebar:
     for i, pair in enumerate(st.session_state['conversation_pairs']):
         btn_label = f"对话 {i + 1}: {pair['question'][:20]}..." if len(
             pair['question']) > 20 else f"对话 {i + 1}: {pair['question']}"
+
         if st.button(btn_label, key=f"conv_btn_{i}"):
             st.session_state['selected_conversation'] = i
             st.rerun()
+
+    # 状态变化检测
+    if 'last_selected' not in st.session_state:
+        st.session_state['last_selected'] = None
+
+    if st.session_state['last_selected'] != st.session_state['selected_conversation']:
+        st.session_state['last_selected'] = st.session_state['selected_conversation']
+        st.rerun()
 
     # 显示当前选中的对话详情
     if st.session_state['selected_conversation'] is not None:
         st.markdown("---")
         pair = st.session_state['conversation_pairs'][st.session_state['selected_conversation']]
-
+        st.text_area("问题", pair['question'], height=100, key=f"q_{st.session_state['selected_conversation']}")
+        st.text_area("回答", pair['answer'], height=200, key=f"a_{st.session_state['selected_conversation']}")

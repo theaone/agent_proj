@@ -157,15 +157,58 @@ def main():
                         except Exception as e:
                             st.error(f"图像分析失败: {str(e)}")
 
-    # 显示分析结果
     if st.session_state.image_analysis:
         st.subheader("📊 图像分析结果")
         st.markdown(st.session_state.image_analysis)
 
-        # 显示标注信息
-        st.subheader("📌 自动标注信息")
-        for annotation in st.session_state.image_annotations:
-            st.markdown(f"- **{annotation['label']}** (置信度: {int(annotation['confidence'] * 100)}%)")
+        # 显示并导出结构化标注信息
+        if st.session_state.image_annotations:
+            # 分类整理标注信息
+            structured_annotations = {
+                "人物信息": [],
+                "车辆信息": [],
+                "建筑物信息": [],
+                "其他信息": []
+            }
+
+            for annotation in st.session_state.image_annotations:
+                label = annotation["label"]
+                confidence = annotation["confidence"]
+                item = {"名称": label, "置信度": confidence}
+
+                if "人" in label or "人物" in label:
+                    structured_annotations["人物信息"].append(item)
+                elif "车" in label or "汽车" in label or "车辆" in label:
+                    structured_annotations["车辆信息"].append(item)
+                elif "建筑" in label or "楼" in label or "房屋" in label:
+                    structured_annotations["建筑物信息"].append(item)
+                else:
+                    structured_annotations["其他信息"].append(item)
+
+            # 展示结构化信息
+            st.subheader("📌 结构化标注信息")
+
+            for category, items in structured_annotations.items():
+                if items:
+                    st.markdown(f"**{category}**")
+                    for item in items:
+                        st.markdown(f"- {item['名称']} (置信度: {int(item['置信度'] * 100)}%)")
+
+            # 导出为JSON
+            import json
+
+            def generate_json():
+                return json.dumps(structured_annotations, indent=4, ensure_ascii=False)
+
+            json_data = generate_json()
+
+            st.download_button(
+                label="📥 下载结构化标注结果为JSON",
+                data=json_data,
+                file_name="structured_image_annotations.json",
+                mime="application/json",
+                key="structured_download_json_button"  # 增加唯一 key 避免重复ID冲突
+            )
 
         # 底部信息
         st.markdown("---")
